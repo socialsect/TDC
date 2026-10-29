@@ -1,26 +1,253 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Design tokens. The interface is strictly monochrome: white, black and neutral grays.
+ * Photography keeps its natural colour.
+ */
+@theme {
+  --color-ink: #000000;
+  --color-paper: #ffffff;
+  --color-mist: #f4f4f3;
+  --color-line: #e6e6e4;
+  --color-muted: #5c5c5c;
+  --color-muted-inverse: #a8a8a8;
+
+  --font-display: var(--font-roboto), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Radius scale: large on hero/feature media, smaller on supporting UI */
+  --radius-xs: 0.625rem;
+  --radius-sm: 1rem;
+  --radius-md: 1.5rem;
+  --radius-lg: 2rem;
+  --radius-xl: 2.75rem;
+  --radius-2xl: 3.5rem;
+
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -12px rgb(0 0 0 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.05), 0 28px 60px -20px rgb(0 0 0 / 0.22);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 6rem;
+    -webkit-text-size-adjust: 100%;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: clip;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-paper);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * Hero pre-paint state. Applies only when the inline script in layout.tsx has flagged
+ * motion as allowed (html.motion-ok) and until GSAP takes over (html.motion-ready), so
+ * the first paint already matches the entrance's starting frame. The keyframes are a
+ * failsafe: if scripts never run, everything settles to its final state after 2.5s.
+ * Nothing below the hero is hidden before JavaScript runs.
+ */
+.motion-ok:not(.motion-ready) [data-hero-item],
+.motion-ok:not(.motion-ready) [data-hero-panel] {
+  visibility: hidden;
+  animation: hero-failsafe 0s linear 2.5s forwards;
+}
+.motion-ok:not(.motion-ready) [data-hero-frame] {
+  clip-path: inset(12% 9% 12% 9% round 2rem);
+  animation: hero-failsafe 0s linear 2.5s forwards;
+}
+.motion-ok:not(.motion-ready) [data-hero-media] {
+  transform: scale(1.32);
+  animation: hero-failsafe 0s linear 2.5s forwards;
+}
+.motion-ok:not(.motion-ready) [data-hero] [data-line] {
+  transform: translateY(115%);
+  animation: hero-failsafe 0s linear 2.5s forwards;
+}
+
+/* While the logo preloader covers the page the hero waits for its hand-off, so the failsafe
+   waits too (past the preloader's 8s hard limit) — otherwise the hero could settle behind the
+   overlay and then jump back to its start state when the entrance begins. */
+html.preloading.motion-ok:not(.motion-ready) :is([data-hero-item], [data-hero-panel], [data-hero-frame], [data-hero-media]),
+html.preloading.motion-ok:not(.motion-ready) [data-hero] [data-line] {
+  animation-delay: 8.2s;
+}
+
+@keyframes hero-failsafe {
+  to {
+    visibility: visible;
+    clip-path: none;
+    transform: none;
+  }
+}
+
+/*
+ * Dentists storytelling stage (desktop): extra scroll distance for the sticky,
+ * scroll-scrubbed sequence. Only added when motion is allowed, so reduced-motion
+ * users never get an empty scroll gap.
+ */
+@media (min-width: 1024px) {
+  .motion-ok [data-dentists-track] {
+    min-height: 165vh;
+  }
+}
+
+/*
+ * Logo preloader (components/layout/Preloader.tsx). Shown only while html.preloading is set —
+ * added before first paint by the inline script in layout.tsx (never for reduced motion, never
+ * without JavaScript). Until GSAP takes over (html.preloader-ready) the logo starts hidden; the
+ * keyframes are failsafes: the logo appears and the whole overlay goes away on its own if
+ * scripts fail, so the site can never stay covered.
+ */
+.preloader {
+  display: none;
+}
+html.preloading .preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482000; /* below the tooth cursor */
+  display: grid;
+  place-items: center;
+  background: var(--color-paper);
+  animation: preloader-failsafe 0s linear 8s forwards;
+}
+html.preloading.preloader-exiting .preloader {
+  pointer-events: none; /* page is interactive while the overlay wipes away */
+}
+.preloader-track {
+  position: relative;
+  width: 11rem; /* scales with the larger logo */
+  height: 1px;
+  overflow: hidden;
+  background: var(--color-line);
+}
+.preloader-bar {
+  position: absolute;
+  inset: 0;
+  background: var(--color-ink);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+html.preloading:not(.preloader-ready) .preloader-logo,
+html.preloading:not(.preloader-ready) .preloader-track {
+  opacity: 0;
+  animation: preloader-show 0s linear 0.8s forwards;
+}
+@keyframes preloader-failsafe {
+  to {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+@keyframes preloader-show {
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * Custom molar-tooth cursor (components/layout/ToothCursor.tsx). Only active once JS adds
+ * html.tooth-cursor, which it does for fine pointers with hover — touch keeps native behaviour.
+ * Text fields keep the native I-beam so text entry and selection feel normal; the embedded
+ * map iframe keeps its own native cursor.
+ */
+html.tooth-cursor:not(.tooth-cursor-native),
+html.tooth-cursor:not(.tooth-cursor-native) * {
+  cursor: none !important;
+}
+html.tooth-cursor
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="range"]),
+    textarea,
+    [contenteditable="true"]
+  ) {
+  cursor: text !important;
+}
+.tooth-cursor-el {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  display: none;
+  will-change: transform;
+}
+html.tooth-cursor .tooth-cursor-el {
+  display: block;
+}
+.tooth-cursor-el > span {
+  display: block;
+  width: 30px;
+  height: 30px;
+  background: url("/cursor/molar-tooth-cursor.svg") center / contain no-repeat;
+  transform-origin: 6px 6px; /* hotspot: the tooth's upper-left tip */
+  opacity: 0;
+  transition:
+    transform 0.18s var(--ease-out-soft),
+    opacity 0.12s linear;
+}
+.tooth-cursor-el[data-visible="true"] > span {
+  opacity: 1;
+}
+/* Hover on links and buttons: a clear tilt plus a slight grow. */
+.tooth-cursor-el[data-state="hover"] > span {
+  transform: scale(1.2) rotate(-20deg);
+}
+.tooth-cursor-el[data-pressed="true"] > span {
+  transform: scale(0.88);
+}
+.tooth-cursor-el[data-state="native"] > span {
+  opacity: 0;
+}
+/* Near/inside a cross-origin iframe (the map) the native cursor takes over (tooth-cursor-native,
+   set by ToothCursor). :has(iframe:hover) is an extra safeguard where the browser reports hover. */
+html.tooth-cursor.tooth-cursor-native .tooth-cursor-el > span,
+html.tooth-cursor:has(iframe:hover) .tooth-cursor-el > span {
+  opacity: 0;
+  transition: none; /* instant handoff, so the tooth and the native cursor never show together */
+}
+@media (prefers-reduced-motion: reduce) {
+  .tooth-cursor-el > span {
+    transition: none;
+  }
 }
